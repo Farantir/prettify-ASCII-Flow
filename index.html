@@ -1,0 +1,466 @@
+    <!DOCTYPE html>
+    <html>
+    <head>
+    	<meta charset=utf-8 />
+    	<title></title>
+    	<link rel="stylesheet" type="text/css" media="screen" href="css/master.css" />
+    </head>
+    <body>
+    <div>
+    	Copy and Paste the output from <a href="http://asciiflow.com/">ASCIIFlow Infinity</a> into the textbox. Then klick the button
+    </div>
+    <div>
+    border color <input id="border_color" value="black"> </input></br>
+    fill color <input id="fill_color" value="#b6bbc9"> </input></br>
+   	arrow color <input id="arrow_color" value="black"> </input></br>
+    text color <input id="text_color" value="black"> </input></br>
+    color of Containing elemts <input id="faint_fill_color" value="#d3d6de"> </input></br>
+    border color of Containing elemts <input id="faint_border_color" value="#404040"> </input></br>
+    </div>
+    
+    <div>
+      <textarea id="input"></textarea> 
+		<button onclick="render_text_input()">
+			Ascii -> png
+		</button>
+		</div>
+	<script>
+	
+	//calls the other UI indepedent functions
+	function render_text_input()
+	{
+	
+		var colors = {};
+		colors.fill_color = document.getElementById("fill_color").value;
+		colors.border_color = document.getElementById("border_color").value;
+		colors.arrow_color = document.getElementById("arrow_color").value;
+		colors.text_color = document.getElementById("text_color").value;
+		colors.faint_fill_color = document.getElementById("faint_fill_color").value;
+		colors.faint_border_color = document.getElementById("faint_border_color").value;
+		
+	
+		render_image(document.body,extract_features(document.getElementById("input").value),[10,20],4,colors)
+
+	}
+	
+	
+	//extracting the features box and arrow and text from the textual representation
+	function extract_features(text)
+	{
+		//will be filled with the different features
+		var features = {};
+	
+		var textfile = text.split("\n");
+		
+		//splitting each string into a char array, to get a 2d array of chars
+		for (var r in textfile) textfile[r] = textfile[r].split('');
+		//finding the largest row, to buffer the other rows with spaces
+		var width = 0;
+		for (var r of textfile) if(width<r.length) width = r.length;
+		//buffering the other rows with spaces
+		for (var r in textfile)
+			while(width>textfile[r].length) textfile[r].push(" ");
+		
+		//now store the width and heigth of the diagram
+		features.image_width = width; 
+		features.image_height = textfile.length; 
+		
+		//searching and storing all + sings, since they must be adge points
+		var points = [];
+		for (var y in textfile)
+			for (var x in textfile[y]) 
+				if(textfile[y][x] == "+") points.push([x*1,y*1]);
+				
+		//serching and storing all connections between the points. 
+		var edges = [];
+		for (var p of points)
+		{
+			//themporary storage for all found edges. Only non redundant edges will be appendet to the edges array later
+			var found_edges = []
+			//search edges in y direction
+			var yoff = 1;
+			while (p[1]+yoff < textfile.length && textfile[p[1]+yoff][p[0]] != " ")
+			{
+				if(textfile[p[1]+yoff][p[0]] == "+") found_edges.push([p,[p[0],p[1]+yoff]]);
+				yoff++;
+			}
+			//search edges in -y direction
+			var yoff = -1;
+			while (p[1]+yoff >= 0 && textfile[p[1]+yoff][p[0]] != " ")
+			{
+				if(textfile[p[1]+yoff][p[0]] == "+") found_edges.push([p,[p[0],p[1]+yoff]]);
+				yoff--;
+			}
+			//search edges in x direction
+			var xoff = 1;
+			while (p[0]+xoff < textfile[p[1]].length && textfile[p[1]][p[0]+xoff] != " ")
+			{
+				if(textfile[p[1]][p[0]+xoff] == "+") found_edges.push([p,[p[0]+xoff,p[1]]]);
+				xoff++;
+			}
+			//search edges in -x directon
+			var xoff = -1;
+			while (p[0]+xoff >= 0 && textfile[p[1]][p[0]+xoff] != " ")
+			{
+				if(textfile[p[1]][p[0]+xoff] == "+") found_edges.push([p,[p[0]+xoff,p[1]]]);
+				xoff--;
+			}
+			//only add "new" (none redundant) edges
+ 			for (var e of found_edges)
+				if(!contains_edge(edges,e)) edges.push(e);
+		}
+		
+		//finding all edges that form a rectangle
+
+		//all 4 edges that form a rectangle
+		var rectangle_edges = [];
+		//find all rectangles for all adges
+		for (var edge of edges)
+		{
+			//Implement as Breadth first search
+			//max depth of 4, since a rectangle has 4 edges
+			//queue synax: [current_edge,point_to_expand,previous_edges] 
+			var current_queue = [[edge,0,[edge]]];
+			var next_queue = [];		
+			for(var n = 0; n<4; n++)
+			{
+				while (current_queue.length>0)
+				{
+				
+					var ed = current_queue.pop();
+					for (k of edges)
+						if(!edge_is_equal(k,ed[0]))
+						{
+							var point_to_search = ed[0][ed[1]];
+							
+							//calculate all edges
+							var path = []
+							for(ne of ed[2]) path.push(ne);
+							path.push(k);							
+							
+							//check if edge is adjesant and store it in the queue if so.
+							if(point_is_equal(point_to_search,k[0])) next_queue.push([k,1,path]);
+							if(point_is_equal(point_to_search,k[1])) next_queue.push([k,0,path]);
+							
+						}
+						
+					if((n == 3) && point_is_equal(ed[0][ed[1]],edge[1]))
+					{
+						//rectangel found, fit it into the rectangle array
+						rectangle_edges.push(ed[2]);
+					}
+				}
+				
+				current_queue = next_queue;
+				next_queue = [];
+				
+			}
+		}
+
+		//rectangles defined as a point, a width and a height
+		var rectangles = [];
+		for(var rect_edges of rectangle_edges)
+		{
+			var rect1 = make_rectangle(rect_edges);
+			if(rect1 != false)
+			{
+				var redundant = false;
+			
+				for(rect2 of rectangles)
+					if(recs_are_equal(rect1,rect2)) 
+					{
+						redundant = true;
+						break;
+					}
+				
+				if((rectangles.length == 0) || (!redundant)) rectangles.push(rect1);
+			}
+		}
+		
+		//rectangles are extracted now. fill the feature array
+		features.rectangles = rectangles;
+		
+		//arrow candidates are not necesarry arrows. ----^ this is an arrow candidate - but not an arrow
+		//also needet: backwards expansion of arrows later on
+		var arrow_candidates = [];
+		var arrow_ends = ["^","<",">","v"]
+		//find all arrows
+		for (var p of points)
+		{
+			//search edges in y direction
+			var yoff = 1;
+			while (p[1]+yoff < textfile.length && textfile[p[1]+yoff][p[0]] != " ")
+			{
+				if(arrow_ends.includes(textfile[p[1]+yoff][p[0]])) arrow_candidates.push([p,[p[0],p[1]+yoff],textfile[p[1]+yoff][p[0]]]);
+				yoff++;
+			}
+			//search edges in -y direction
+			var yoff = -1;
+			while (p[1]+yoff >= 0 && textfile[p[1]+yoff][p[0]] != " ")
+			{
+				if(arrow_ends.includes(textfile[p[1]+yoff][p[0]])) arrow_candidates.push([p,[p[0],p[1]+yoff],textfile[p[1]+yoff][p[0]]]);
+				yoff--;
+			}
+			//search edges in x direction
+			var xoff = 1;
+			while (p[0]+xoff < textfile[p[1]].length && textfile[p[1]][p[0]+xoff] != " ")
+			{
+				if(arrow_ends.includes(textfile[p[1]][p[0]+xoff])) arrow_candidates.push([p,[p[0]+xoff,p[1]],textfile[p[1]][p[0]+xoff]]);
+				xoff++;
+			}
+			//search edges in -x directon
+			var xoff = -1;
+			while (p[0]+xoff >= 0 && textfile[p[1]][p[0]+xoff] != " ")
+			{
+				if(arrow_ends.includes(textfile[p[1]][p[0]+xoff])) arrow_candidates.push([p,[p[0]+xoff,p[1]],textfile[p[1]][p[0]+xoff]]);
+				xoff--;
+			}
+		}
+		
+		//throw all arrow candidates away, that arent arrows
+		arrows = [];
+		for(var arc of arrow_candidates)
+		{
+			var p1 = arc[0];
+			var p2 = arc[1];
+			//get the orientation of the arrow
+			//> arrow;
+			if(p1[0]<p2[0] && arc[2] == ">")  arrows.push([arc[0],arc[1]]);
+			if(p1[0]>p2[0] && arc[2] == "<")  arrows.push([arc[0],arc[1]]);
+			if(p1[1]>p2[1] && arc[2] == "^")  arrows.push([arc[0],arc[1]]);
+			if(p1[1]<p2[1] && arc[2] == "v")  arrows.push([arc[0],arc[1]]);
+			
+			
+		}
+		
+		//expanding arrows needed:
+		//search all matching edges. if number greater than 1 or 0, stop
+		//else: append edge to the arrow. restart
+		for(var a in arrows)
+		{
+				var ed = [arrows[a],arrows[a][0]];
+				var done = false;
+				while(!done)
+				{
+					var found = [];
+					for (k of edges)
+						if(!edge_is_equal(k,ed[0]))
+						{
+							var point_to_search = ed[1];
+													
+							
+							//check if edge is adjesant and store it in the queue if so.
+							if(point_is_equal(point_to_search,k[0])) found.push([k,k[1]]);
+							if(point_is_equal(point_to_search,k[1])) found.push([k,k[0]]);
+							
+						}
+						if(found.length != 1) done = true;
+						else
+						{
+							ed = found[0];
+							arrows[a].unshift(found[0][1])
+						}
+					}
+		}
+		//saving the arrows
+		features.arrows = arrows;
+	
+		//extracting written text from the doument
+		var text = [];
+		var reserved = ["^","<",">","v","-","|","+"," "];
+		var reserved2 = ["^","<",">","|","+"," "];
+		var reserved3 = ["^","<",">","-","|","+"," "];
+		
+		for (var y in textfile)
+			for (var x = 0; x < textfile[y].length; x++) 
+				if(!reserved.includes(textfile[y][x]))
+				{
+					var found_text = [[x,y],""];
+					do
+					{
+						found_text[1] += textfile[y][x];
+						x++;
+					}
+					while (!(textfile[y].length <= x+1) && !(reserved3.includes(textfile[y][x]) && reserved2.includes(textfile[y][x+1])))
+					
+					text.push(found_text);
+				}
+				
+				
+		features.text = text;		
+				
+		return features;
+	}
+
+	
+	
+	//renders the given image on a canvas and appends it to the target element
+	function render_image(target, features,scale,border,colors)
+	{
+		var canv = document.createElement("canvas");
+		canv.height = features.image_height*scale[1] + border*2
+		canv.width = features.image_width*scale[0] + border*2
+		target.appendChild(canv);
+		var canvas = canv.getContext("2d");
+		
+		var fill_color = "#b6bbc9";
+		var border_color = "black";
+		var arrow_color = "black";
+		var text_color = "black";
+		var faint_fill_color = "#d3d6de";
+		var faint_border_color = "#404040";
+		
+		//sorts rectangles, so they get drawn in the right order
+		var sortet_bloks = features.rectangles.sort ((a,b)=>{if(a[0][0] > b[0][0]) return 1; return -1;})
+		//assign the colors to the rectangles. if a rectangle contains another, its color will be lighter
+		for (var a of sortet_bloks) a.color = [colors.border_color,colors.fill_color];
+		for (var a of sortet_bloks) 
+			for(var b of sortet_bloks)
+				if(contains(a,b))
+				{
+					a.color = [colors.faint_border_color,colors.faint_fill_color];
+					break;
+				}
+	
+		//draw all rectangles
+		for(var r of sortet_bloks) draw_rectangle(r,canvas,scale,border);
+		
+		//draw all arrows
+		for(var arr of features.arrows) draw_arrow(arr,canvas,colors.arrow_color,scale,border);
+		
+		//draw all texts
+		for(var text of features.text) draw_text(text,canvas,colors.text_color,scale,border);
+	}
+	
+	//writes text on the canvas
+	function draw_text(text,canv,color,scale,border)
+	{
+		canv.fillStyle = color;
+		canv.font = "16px Arial";
+		canv.fillText(text[1], text[0][0] * scale[0] + border, text[0][1] * scale[1] + border + 15); 
+	}
+	
+	//draws a rectangle on a given canvas
+	function draw_rectangle(rect,canv,scale,border)
+	{
+		canv.beginPath();
+		canv.strokeStyle = rect.color[0];
+		canv.fillStyle = rect.color[1];
+		canv.rect(rect[0][0]*scale[0] + border, rect[0][1]*scale[1]+border, rect[2]*scale[0], rect[1]*scale[1]);
+		canv.fillRect(rect[0][0]*scale[0] + border, rect[0][1]*scale[1]+border, rect[2]*scale[0], rect[1]*scale[1]);
+		canv.stroke();
+	}
+	
+	//draws an arrow
+	function draw_arrow(arrow,canvas,color,scale,border)
+	{ 
+		canvas.strokeStyle = color;
+		canvas.beginPath();
+		//draw the body of the arrow
+		for(var i=1; i<arrow.length-1; i++ )
+		{
+	    canvas.moveTo(arrow[i-1][0] * scale[0] + border, arrow[i-1][1]  * scale[1] + border);
+    	canvas.lineTo(arrow[i][0] * scale[0] + border, arrow[i][1]  * scale[1] + border);
+		}
+		
+		//draw the aktual arrow
+		canvas_arrow(canvas, arrow[arrow.length-2][0] * scale[0] + border, arrow[arrow.length-2][1] * scale[1] + border, arrow[arrow.length-1][0] * scale[0] + border, arrow[arrow.length-1][1] * scale[1] + border)
+		
+		canvas.stroke();
+
+	}
+	
+	//actual code for drawing an arrow from stak overflow
+	function canvas_arrow(context, fromx, fromy, tox, toy)
+	{
+    var headlen = 10;   // length of head in pixels
+    var angle = Math.atan2(toy-fromy,tox-fromx);
+    
+    
+    context.moveTo(fromx, fromy);
+    context.lineTo(tox, toy);
+    context.lineTo(tox-headlen*Math.cos(angle-Math.PI/6),toy-headlen*Math.sin(angle-Math.PI/6));
+    context.moveTo(tox, toy);
+    context.lineTo(tox-headlen*Math.cos(angle+Math.PI/6),toy-headlen*Math.sin(angle+Math.PI/6));
+    
+	}
+	
+	//checks, if rectangle a contains rectangle b.
+	function contains(a,b)
+	{
+		if(a[0][0]<b[0][0] && a[0][1]<b[0][1] && a[0][0]+a[2]>b[0][0]+b[2] && a[0][1]+a[1]>b[0][1]+b[1]) return true;
+		return false;
+	}
+	
+	//compares if two rectangles are equal
+	function recs_are_equal(rect1,rect2)
+	{
+		if(point_is_equal(rect1[0],rect2[0]))
+			if((rect1[1] == rect2[1]) && (rect2[2] == rect2[2]))
+				return true;
+				
+		return false;
+	}
+	
+	//transforms a rectangle given as a list of edges into a point + width + height  representation
+	function make_rectangle(edges_of_rect)
+	{
+		//extract the points from the rectangle edges
+		var points = []
+		for(var edge of edges_of_rect)
+		{
+			points.push(edge[0]);
+			points.push(edge[1]);
+		}
+		
+		//search for the right-top-most point, the width and the heigth
+		var miny = points[0][1];
+		var minx = points[0][0];
+		var maxx = points[0][0];
+		var maxy = points[0][1];
+		for(var point of points)
+		{
+			//x
+			if(point[0]>maxx) maxx = point[0];
+			if(point[0]<minx) minx = point[0];
+			
+			//y
+			if(point[1]>maxy) maxy = point[1];
+			if(point[1]<miny) miny = point[1];
+		}
+		//build the none redundant rectangle representation
+		var height = maxy-miny;
+		var width = maxx-minx;
+		if(width != 0 && height != 0) return [[minx,miny],height,width];
+		
+		//the rectanlge has an area of 0 and is therefore a line
+		return false;
+	}
+	
+	//returns true, if a given array contains an edge, returns false if not
+	function contains_edge(arr,edge)
+	{
+		for(var e of arr)
+			if(edge_is_equal(e,edge)) return true;
+		
+		return false;
+	}
+	
+	//checks to edges for equality, edges are considert bedirectional
+	function edge_is_equal(edge1,edge2)
+	{
+		if(point_is_equal(edge1[0],edge2[0]) && point_is_equal(edge1[1],edge2[1])) return true;
+		else if (point_is_equal(edge1[1],edge2[0]) && point_is_equal(edge1[0],edge2[1])) return true;
+		return false;
+	}
+	
+	//checks if two points are identical
+	function point_is_equal(p1,p2)
+	{
+		if((p1[0] == p2[0]) && (p1[1] == p2[1])) return true;
+		return false;
+	}
+	
+	</script>
+    </body>
+    </html>
