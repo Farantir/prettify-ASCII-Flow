@@ -14,6 +14,7 @@
     fill color <input id="fill_color" value="#b6bbc9"> </input></br>
    	arrow color <input id="arrow_color" value="black"> </input></br>
     text color <input id="text_color" value="black"> </input></br>
+    Dot size <input id="dot_size" value="3"> </input></br>
     color of Containing elemts <input id="faint_fill_color" value="#d3d6de"> </input></br>
     border color of Containing elemts <input id="faint_border_color" value="#404040"> </input></br>
     </div>
@@ -38,8 +39,8 @@
 		colors.faint_fill_color = document.getElementById("faint_fill_color").value;
 		colors.faint_border_color = document.getElementById("faint_border_color").value;
 		
-	
-		render_image(document.body,extract_features(document.getElementById("input").value),[10,20],4,colors)
+		var dot_size = document.getElementById("dot_size").value*1
+		render_image(document.body,extract_features(document.getElementById("input").value),[10,20],4,colors,dot_size)
 
 	}
 	
@@ -73,41 +74,74 @@
 				
 		//serching and storing all connections between the points. 
 		var edges = [];
+		//also noting all connections, that are minimal
+		// +-------+ = minimal edge
+		// +----+--+ = not a minimal edge
+		var minimal_edges = [];
+		
 		for (var p of points)
 		{
 			//themporary storage for all found edges. Only non redundant edges will be appendet to the edges array later
 			var found_edges = []
+			var found_minimal_edges = [];
 			//search edges in y direction
 			var yoff = 1;
+			var first_edge = true;
 			while (p[1]+yoff < textfile.length && textfile[p[1]+yoff][p[0]] != " ")
 			{
-				if(textfile[p[1]+yoff][p[0]] == "+") found_edges.push([p,[p[0],p[1]+yoff]]);
+				if(textfile[p[1]+yoff][p[0]] == "+")
+				{
+					found_edges.push([p,[p[0],p[1]+yoff]]);
+					if(first_edge) found_minimal_edges.push([p,[p[0],p[1]+yoff]])
+					first_edge = false;
+				}
 				yoff++;
 			}
 			//search edges in -y direction
 			var yoff = -1;
+			first_edge = true;
 			while (p[1]+yoff >= 0 && textfile[p[1]+yoff][p[0]] != " ")
 			{
-				if(textfile[p[1]+yoff][p[0]] == "+") found_edges.push([p,[p[0],p[1]+yoff]]);
+				if(textfile[p[1]+yoff][p[0]] == "+")
+				{
+					found_edges.push([p,[p[0],p[1]+yoff]]);
+					if(first_edge) found_minimal_edges.push([p,[p[0],p[1]+yoff]])
+					first_edge = false;
+				}
 				yoff--;
 			}
 			//search edges in x direction
 			var xoff = 1;
+			first_edge = true;
 			while (p[0]+xoff < textfile[p[1]].length && textfile[p[1]][p[0]+xoff] != " ")
 			{
-				if(textfile[p[1]][p[0]+xoff] == "+") found_edges.push([p,[p[0]+xoff,p[1]]]);
+				if(textfile[p[1]][p[0]+xoff] == "+")
+				{
+					found_edges.push([p,[p[0]+xoff,p[1]]]);
+					if(first_edge) found_minimal_edges.push([p,[p[0]+xoff,p[1]]])
+					first_edge = false;
+				}
 				xoff++;
 			}
 			//search edges in -x directon
 			var xoff = -1;
+			first_edge = true;
 			while (p[0]+xoff >= 0 && textfile[p[1]][p[0]+xoff] != " ")
 			{
-				if(textfile[p[1]][p[0]+xoff] == "+") found_edges.push([p,[p[0]+xoff,p[1]]]);
+				if(textfile[p[1]][p[0]+xoff] == "+") 
+				{
+					found_edges.push([p,[p[0]+xoff,p[1]]]);
+					if(first_edge) found_minimal_edges.push([p,[p[0]+xoff,p[1]]])
+					first_edge = false;
+				}
 				xoff--;
 			}
 			//only add "new" (none redundant) edges
  			for (var e of found_edges)
 				if(!contains_edge(edges,e)) edges.push(e);
+				
+			for (var e of found_minimal_edges)
+				if(!contains_edge(minimal_edges,e)) minimal_edges.push(e);
 		}
 		
 		//finding all edges that form a rectangle
@@ -156,6 +190,28 @@
 				
 			}
 		}
+		
+		//remove all edges that are part of a rectangle as a line candidate
+		var line_candidates = [];
+		for (var e of minimal_edges)
+		{
+			var is_line_candidate = true;
+			//check if the edge is part of a rectangle
+			for(var redge of rectangle_edges)
+			{
+				for(var e1 of redge)
+				{			
+					if(do_overlap(e,e1) || edge_is_equal(e,e1))
+					{
+						is_line_candidate = false;
+						break;
+					}					
+				}		
+				if(!is_line_candidate) break;
+			}
+			if(is_line_candidate) line_candidates.push(e);
+		}
+		
 
 		//rectangles defined as a point, a width and a height
 		var rectangles = [];
@@ -189,28 +245,28 @@
 		{
 			//search edges in y direction
 			var yoff = 1;
-			while (p[1]+yoff < textfile.length && textfile[p[1]+yoff][p[0]] != " ")
+			while (p[1]+yoff < textfile.length && textfile[p[1]+yoff][p[0]] != " " && textfile[p[1]+yoff][p[0]] != "+")
 			{
 				if(arrow_ends.includes(textfile[p[1]+yoff][p[0]])) arrow_candidates.push([p,[p[0],p[1]+yoff],textfile[p[1]+yoff][p[0]]]);
 				yoff++;
 			}
 			//search edges in -y direction
 			var yoff = -1;
-			while (p[1]+yoff >= 0 && textfile[p[1]+yoff][p[0]] != " ")
+			while (p[1]+yoff >= 0 && textfile[p[1]+yoff][p[0]] != " " && textfile[p[1]+yoff][p[0]] != "+")
 			{
 				if(arrow_ends.includes(textfile[p[1]+yoff][p[0]])) arrow_candidates.push([p,[p[0],p[1]+yoff],textfile[p[1]+yoff][p[0]]]);
 				yoff--;
 			}
 			//search edges in x direction
 			var xoff = 1;
-			while (p[0]+xoff < textfile[p[1]].length && textfile[p[1]][p[0]+xoff] != " ")
+			while (p[0]+xoff < textfile[p[1]].length && textfile[p[1]][p[0]+xoff] != " " && textfile[p[1]][p[0]+xoff] != "+")
 			{
 				if(arrow_ends.includes(textfile[p[1]][p[0]+xoff])) arrow_candidates.push([p,[p[0]+xoff,p[1]],textfile[p[1]][p[0]+xoff]]);
 				xoff++;
 			}
 			//search edges in -x directon
 			var xoff = -1;
-			while (p[0]+xoff >= 0 && textfile[p[1]][p[0]+xoff] != " ")
+			while (p[0]+xoff >= 0 && textfile[p[1]][p[0]+xoff] != " " && textfile[p[1]][p[0]+xoff] != "+")
 			{
 				if(arrow_ends.includes(textfile[p[1]][p[0]+xoff])) arrow_candidates.push([p,[p[0]+xoff,p[1]],textfile[p[1]][p[0]+xoff]]);
 				xoff--;
@@ -236,6 +292,11 @@
 		//expanding arrows needed:
 		//search all matching edges. if number greater than 1 or 0, stop
 		//else: append edge to the arrow. restart
+		
+		//todo:
+		//if an arrow is expanded, throw all line candidates away, that are part of the arrow.
+		//note: this segment is currently disabled, arrows are used in none expandet form
+	/*
 		for(var a in arrows)
 		{
 				var ed = [arrows[a],arrows[a][0]];
@@ -243,7 +304,7 @@
 				while(!done)
 				{
 					var found = [];
-					for (k of edges)
+					for (k of minimal_edges)
 						if(!edge_is_equal(k,ed[0]))
 						{
 							var point_to_search = ed[1];
@@ -262,8 +323,40 @@
 						}
 					}
 		}
+		*/
+		
+		var connection_point = [];
+		//finding all connections between minimal lines. those need to be marked.
+		for (var l1 of line_candidates)
+		{
+			for(var l2 of line_candidates)
+			{
+				var point = false;
+				if(edge_is_equal(l1,l2)); //do nothing, same edge will have the same edge points
+				else if(point_is_equal(l1[0],l2[0]) || point_is_equal(l1[0],l2[1])) point = l1[0];
+				else if(point_is_equal(l1[1],l2[0]) || point_is_equal(l1[1],l2[1])) point = l1[1];
+				if(point != false)
+				{
+					var new_point = true;
+					for (var p1 of connection_point) 
+						if(point_is_equal(p1,point)) 
+						{
+							new_point = false;
+							break;
+						}
+					if(new_point) connection_point.push(point);
+				}
+			}
+		}
+
 		//saving the arrows
 		features.arrows = arrows;
+		
+		//saving the remaining lines
+		features.lines = line_candidates;
+		
+		//saving connection points
+		features.points = connection_point;
 	
 		//extracting written text from the doument
 		var text = [];
@@ -295,7 +388,7 @@
 	
 	
 	//renders the given image on a canvas and appends it to the target element
-	function render_image(target, features,scale,border,colors)
+	function render_image(target, features,scale,border,colors, dot_size)
 	{
 		var canv = document.createElement("canvas");
 		canv.height = features.image_height*scale[1] + border*2
@@ -328,8 +421,22 @@
 		//draw all arrows
 		for(var arr of features.arrows) draw_arrow(arr,canvas,colors.arrow_color,scale,border);
 		
+		//draw all lines
+		for(var line of features.lines) draw_line(line,canvas,colors.arrow_color,scale,border);
+		
 		//draw all texts
 		for(var text of features.text) draw_text(text,canvas,colors.text_color,scale,border);
+		
+		//draw all connection points
+		for(var point of features.points) draw_point(point,canvas,colors.arrow_color,scale,border,dot_size);
+	}
+	
+	function draw_point(point,canv,color,scale,border,dot_size)
+	{
+		canv.fillStyle = color;
+		canv.beginPath();
+		canv.arc(point[0]*scale[0] + border,point[1]*scale[1] + border, dot_size, 0, 2*Math.PI);
+		canv.fill();
 	}
 	
 	//writes text on the canvas
@@ -368,6 +475,18 @@
 		
 		canvas.stroke();
 
+	}
+	
+	//function to draw a Line on the canvas
+	function draw_line(line,canvas,color,scale,border)
+	{
+		canvas.strokeStyle = color;
+		canvas.beginPath();
+		//draw the line
+    canvas.moveTo(line[0][0] * scale[0] + border, line[0][1]  * scale[1] + border);
+  	canvas.lineTo(line[1][0] * scale[0] + border, line[1][1]  * scale[1] + border);
+		
+		canvas.stroke();
 	}
 	
 	//actual code for drawing an arrow from stak overflow
@@ -435,6 +554,49 @@
 		
 		//the rectanlge has an area of 0 and is therefore a line
 		return false;
+	}
+	
+	//cheks wether an edge1 is partially inside edge2 or wice versa. returns false if the edges dont overlap
+	function do_overlap(edge1,edge2)
+	{
+		var check_e1 = [];
+		var check_e2 = [];
+		
+		//check wether or not the two edges are on one line
+		if(edge1[0][0] == edge2[0][0] && edge1[1][0] == edge2[1][0] && edge2[0][0] == edge2[1][0] && edge1[0][0] == edge1[1][0])
+		{
+			check_e1 = [edge1[0][1],edge1[1][1]];
+			check_e2 = [edge2[0][1],edge2[1][1]];
+		}
+		else if(edge1[0][1] == edge2[0][1] && edge1[1][1] == edge2[1][1] && edge2[0][1] == edge2[1][1] && edge1[0][1] == edge1[1][1])
+		{
+			check_e1 = [edge1[0][0],edge1[1][0]];
+			check_e2 = [edge2[0][0],edge2[1][0]];
+		}
+		else return false;
+		
+		//if the edges are one line, check if they overlap
+		//sort the values
+		
+		check_e1 = sort_two(check_e1);
+		check_e2 = sort_two(check_e2);
+		
+			
+		if(check_e1[1] <= check_e2[0]) return false;
+		if(check_e2[1] <= check_e1[0]) return false;
+		return true;		
+	}
+	
+	//sorts two values of an array
+	function sort_two(arr)
+	{
+		if(arr[0]>arr[1]) 
+		{
+			var k = arr[0];
+			arr[0] = arr[1];
+			arr[1] = k;
+		}
+		return arr;
 	}
 	
 	//returns true, if a given array contains an edge, returns false if not
