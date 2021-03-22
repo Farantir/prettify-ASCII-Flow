@@ -5,5 +5,3 @@ The Page http://asciiflow.com/ lets you create simple diagrams in ASCII art. The
 
 Now you can generate a pretty png from the ASCII Diagrams using this tool.
 
-Live version at:
-https://jhippe.de/asciitopng/
